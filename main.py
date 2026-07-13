@@ -7,7 +7,8 @@ async def main():
         "role": "user",
         "content": "Hello, how are you?"
     }]
-    await client.chat_completion(messages, False)
+    async for event in client.chat_completion(messages, False):
+        print(event)
     print("done")
     
 
