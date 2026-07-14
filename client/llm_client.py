@@ -1,4 +1,6 @@
-from openai import AsyncOpenAI
+import asyncio
+
+from openai import APIConnectionError, APIError, AsyncOpenAI, RateLimitError
 from typing import Any, AsyncGenerator
 from client.response import TextDelta, TokenUsage, StreamEvent,EventType
 import os
@@ -26,6 +28,7 @@ class LLMClient:
         via the get_client() method.
         """
         self._client: AsyncOpenAI | None = None
+        self._max_retries: int = 3
         
         
         
@@ -84,20 +87,50 @@ class LLMClient:
                 Uses the hardcoded model "tencent/hy3:free" via OpenRouter.
             """
             client = self.get_client()
-        
+            
             kwargs = {
                 "model": "tencent/hy3:free",
                 "messages": messages,
                 "stream": stream
             }
-        
-            if stream:
-                async for event in self._stream_response(client, kwargs):
-                    yield event
-            else:
-                event = await self._non_stream_response(client, kwargs)
-                yield event
-            return
+            
+            for attempt in range(self._max_retries + 1):
+                try:
+                    if stream:
+                        async for event in self._stream_response(client, kwargs):
+                            yield event
+                    else:
+                        event = await self._non_stream_response(client, kwargs)
+                        yield event
+                    return
+                except RateLimitError as e:
+                    if attempt < self._max_retries:
+                        wait_time=2*attempt
+                        await asyncio.sleep(wait_time)
+                    else:
+                        yield StreamEvent(
+                            type=EventType.ERROR,
+                            error=f"Rate limit exceeded: {e}"
+                        )
+                        return
+                except APIConnectionError as e:
+                    if attempt < self._max_retries:
+                        wait_time=2*attempt
+                        await asyncio.sleep(wait_time)
+                    else:
+                        yield StreamEvent(
+                            type=EventType.ERROR,
+                            error=f"Connection error: {e}"
+                        )
+                        return
+                except APIError as e:
+                    yield StreamEvent(
+                        type=EventType.ERROR,
+                        error=f"API error: {e}"
+                    )
+                    return
+                        
+            
 
             
             
