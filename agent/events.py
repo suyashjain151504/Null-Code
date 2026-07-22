@@ -43,5 +43,19 @@ class AgentEvent:
             type=AgentEventType.AGENT_ERROR, 
             data={"error":error, "details": details or {}}
         )
+        
     
+    @classmethod
+    def text_delta(cls, content:str) -> AgentEvent:
+        return cls(
+            type=AgentEventType.TEXT_DELTA, 
+            data={"content":content}
+        )
+        
+    @classmethod
+    def text_complete(cls, content:str) -> AgentEvent:
+        return cls(
+            type=AgentEventType.TEXT_COMPLETE, 
+            data={"content":content}
+        )
     
